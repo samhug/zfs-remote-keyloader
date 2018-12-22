@@ -13,6 +13,30 @@ func usage() {
 	fmt.Println("Usage: test-init-app")
 }
 
+type Config struct {
+	ListenAddr string
+	ListenPort int
+
+	PoolName string
+}
+
+func getConfig() *Config {
+
+
+	if len(os.Args) > 1 && os.Args[1] == "--help" {
+		usage()
+		os.Exit(0)
+	}
+
+	cfg := &Config{}
+
+	cfg.ListenAddr = "0.0.0.0"
+	cfg.ListenPort = 3333
+	cfg.PoolName = "rpool/home2"
+
+	return cfg
+}
+
 func getIfaceList() ([]string, error) {
 	ifaces, err := net.Interfaces()
 	if err != nil {
@@ -40,10 +64,7 @@ func getIfaceList() ([]string, error) {
 
 func main() {
 
-	if len(os.Args) > 1 && os.Args[1] == "--help" {
-		usage()
-		return
-	}
+	cfg := getConfig()
 
 	fmt.Println("Hello from the golang test init app")
 
@@ -52,7 +73,7 @@ func main() {
 		fmt.Println(ip)
 	}
 
-	l, err := net.Listen("tcp", "0.0.0.0:3333")
+	l, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.ListenAddr, cfg.ListenPort))
 	if err != nil {
 		fmt.Println("Error listening:", err.Error())
 		os.Exit(1)
@@ -66,11 +87,11 @@ func main() {
 			continue
 		}
 
-		go handleRequest(conn)
+		go handleRequest(conn, cfg)
 	}
 }
 
-func handleRequest(conn net.Conn) {
+func handleRequest(conn net.Conn, cfg *Config) {
 
 	defer conn.Close()
 
@@ -102,7 +123,7 @@ func handleRequest(conn net.Conn) {
 		return
 	}
 
-	cmd := exec.Command("zfs", "load-key", "-L", fmt.Sprintf("file://%s", f.Name()), "rpool/home2")
+	cmd := exec.Command("zfs", "load-key", "-L", fmt.Sprintf("file://%s", f.Name()), cfg.PoolName)
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -118,6 +139,7 @@ func handleRequest(conn net.Conn) {
 
 	conn.Write(stdout.Bytes())
 	conn.Write(stderr.Bytes())
+
 
 	// we've successfully unlocked, shutdown the server
 	os.Exit(0)
