@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/samuelhug/zfs-remote-key-loader/zfs"
+	"github.com/samuelhug/zfs-remote-keyloader/zfs"
 	"github.com/spf13/cobra"
 
 	"html/template"
@@ -13,7 +13,7 @@ import (
 )
 
 var listenAddr string
-var fsName string
+var datasetName string
 
 var responseTmpl *template.Template
 
@@ -23,14 +23,14 @@ func init() {
 	initTemplates()
 
 	serverCmd.Flags().StringVar(&listenAddr, "listen", "0.0.0.0:3333", "addr:port to listen on")
-	serverCmd.Flags().StringVar(&fsName, "fs", "", "ZFS filesystem/volume to load keys for")
-	serverCmd.MarkFlagRequired("fs")
+	serverCmd.Flags().StringVar(&datasetName, "dataset", "", "ZFS dataset to load keys for")
+	serverCmd.MarkFlagRequired("dataset")
 }
 
 var serverCmd = &cobra.Command{
 	Use:   "server",
 	Short: "Start HTTP remote key load server",
-	Long:  `Serves a web form over HTTP to prompt for ZFS pool decryption keys`,
+	Long:  `Serves a web form over HTTP to prompt for ZFS dataset decryption keys`,
 	Run:   serverRun,
 }
 
@@ -63,7 +63,7 @@ var server *http.Server
 
 func serverRun(cmd *cobra.Command, args []string) {
 
-	fmt.Println("starting zfs-remote-key-loader server...")
+	fmt.Println("starting zfs-remote-keyloader server...")
 
 	ips, err := getIfaceList()
 	if err != nil {
@@ -94,7 +94,7 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method != http.MethodPost {
 		data := &responseTmplData{
-			FSName: fsName,
+			DatasetName: datasetName,
 		}
 		responseTmpl.Execute(w, data)
 		return
@@ -102,11 +102,11 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	key := []byte(r.FormValue("decryption-key"))
 
-	if err := zfs.LoadKey(key, fsName); err != nil {
+	if err := zfs.LoadKey(key, datasetName); err != nil {
 		data := &responseTmplData{
-			Success: false,
-			FSName:  fsName,
-			Message: fmt.Sprintf("Failed: %s", err.Error()),
+			Success:     false,
+			DatasetName: datasetName,
+			Message:     fmt.Sprintf("Failed: %s", err.Error()),
 		}
 		responseTmpl.Execute(w, data)
 		return
@@ -123,9 +123,9 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 type responseTmplData struct {
-	Success bool
-	FSName  string
-	Message string
+	Success     bool
+	DatasetName string
+	Message     string
 }
 
 func initTemplates() {
@@ -141,7 +141,7 @@ func initTemplates() {
 {{if .Success}}
 {{else}}
 <form method="POST">
-<label>Enter decryption key for "{{.FSName}}":</label><br />
+<label>Enter decryption key for "{{.DatasetName}}":</label><br />
 <input type="password" name="decryption-key"><br />
 <input type="submit">
 </form>

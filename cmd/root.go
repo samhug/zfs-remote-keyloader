@@ -8,7 +8,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "zfs-remote-key-loader",
+	Use:   "zfs-remote-keyloader",
 	Short: "Remote ZFS key loader",
 	Long:  `Run an HTTP server allowing ZFS keys to be loaded remotely`,
 	Run: func(cmd *cobra.Command, args []string) {

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/samuelhug/zfs-remote-key-loader/cmd"
+	"github.com/samuelhug/zfs-remote-keyloader/cmd"
 )
 
 func main() {
