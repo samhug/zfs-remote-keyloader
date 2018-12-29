@@ -27,8 +27,9 @@ func LoadKey(key []byte, fsName string) error {
 	// Run the zfs command
 	cmd := exec.Command("zfs", "load-key", "-L", fmt.Sprintf("file://%s", f.Name()), fsName)
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("Error loading zfs key: %s", err.Error())
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("Error loading zfs key: %s\n%s", err.Error(), string(out))
 	}
 
 	return nil

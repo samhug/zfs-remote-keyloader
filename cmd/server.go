@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"html/template"
+	"net"
 	"net/http"
 	"os"
 )
@@ -33,62 +34,49 @@ var serverCmd = &cobra.Command{
 	Run:   serverRun,
 }
 
-//func loadConfig() {
-//
-//	if len(os.Args) > 1 && os.Args[1] == "--help" {
-//		usage()
-//		os.Exit(0)
-//	}
-//
-//	config = &Config{}
-//
-//	config.ListenAddr = "0.0.0.0"
-//	config.ListenPort = 3333
-//	config.PoolName = "rpool/home2"
-//}
-
-//func getIfaceList() ([]string, error) {
-//	ifaces, err := net.Interfaces()
-//	if err != nil {
-//		return nil, err
-//	}
-//	ips := []string{}
-//	for _, iface := range ifaces {
-//		addrs, err := iface.Addrs()
-//		if err != nil {
-//			return nil, err
-//		}
-//		for _, addr := range addrs {
-//			var ip net.IP
-//			switch v := addr.(type) {
-//			case *net.IPNet:
-//				ip = v.IP
-//			case *net.IPAddr:
-//				ip = v.IP
-//			}
-//			ips = append(ips, ip.String())
-//		}
-//	}
-//	return ips, nil
-//}
+func getIfaceList() ([]string, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	ips := []string{}
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return nil, err
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			ips = append(ips, ip.String())
+		}
+	}
+	return ips, nil
+}
 
 var server *http.Server
 
 func serverRun(cmd *cobra.Command, args []string) {
 
-	fmt.Println("Starting remote-zfs-load-key server...")
+	fmt.Println("starting zfs-remote-key-loader server...")
 
-	fmt.Println("Listen Address: ", listenAddr)
+	ips, err := getIfaceList()
+	if err != nil {
+		fmt.Println("Failed to enumerate ip addresses: ", err.Error())
+		os.Exit(1)
+	}
 
-	//ips, err := getIfaceList()
-	//if err != nil {
-	//	fmt.Println("Failed to enumerate ip addresses: ", err.Error())
-	//	os.Exit(1)
-	//}
+	fmt.Printf("Server has %d IP(s):\n", len(ips))
+	for _, ip := range ips {
+		fmt.Println(" -", ip)
+	}
 
-	//for _, ip := range ips {
-	//	fmt.Println(ip)
-	//}
+	fmt.Println("listening at ", listenAddr)
 
 	http.HandleFunc("/", handleRequest)
 
