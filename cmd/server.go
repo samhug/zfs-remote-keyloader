@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/samuelhug/zfs-remote-keyloader/zfs"
+	"github.com/samhug/zfs-remote-keyloader/zfs"
 	"github.com/spf13/cobra"
 
 	"html/template"
