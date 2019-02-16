@@ -119,7 +119,8 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 	responseTmpl.Execute(w, data)
 
 	// we've successfully unlocked, shutdown the server
-	go server.Shutdown(nil)
+	//TODO: Should replace this with server.Shutdown /w a context
+	server.Close()
 }
 
 type responseTmplData struct {
