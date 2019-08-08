@@ -1,0 +1,12 @@
+[global]
+workers = 2
+
+[development]
+address = "localhost"
+port = 8000
+log = "normal"
+
+[production]
+address = "0.0.0.0"
+port = 8000
+log = "critical"
