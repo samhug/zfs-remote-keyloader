@@ -10,8 +10,8 @@ use hyper::rt::{Future, Stream};
 use hyper::service::service_fn;
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 
-use url::form_urlencoded;
 use std::collections::HashMap;
+use url::form_urlencoded;
 
 #[derive(Debug)]
 struct LoadKeyErr {
@@ -19,9 +19,9 @@ struct LoadKeyErr {
 }
 
 impl LoadKeyErr {
-	fn new(msg: String) -> Self {
-		return LoadKeyErr{message: msg}
-	}
+    fn new(msg: String) -> Self {
+        return LoadKeyErr { message: msg };
+    }
 }
 
 fn zfs_loadkey(dataset: String, key: String) -> Result<(), LoadKeyErr> {
@@ -31,14 +31,12 @@ fn zfs_loadkey(dataset: String, key: String) -> Result<(), LoadKeyErr> {
 
     // create a temp file to hold the key
     // TODO: You really shouldn't write the key to disk...
-    let mut key_file = NamedTempFile::new().map_err(|_e|
-		LoadKeyErr::new("failed to create temporary key file".to_string())
-	)?;
+    let mut key_file = NamedTempFile::new()
+        .map_err(|_e| LoadKeyErr::new("failed to create temporary key file".to_string()))?;
 
     // write the key to the temp file
-    write!(key_file, "{}", key).map_err(|_e|
-		LoadKeyErr::new("failed to write key to temporary key file".to_string())
-	)?;
+    write!(key_file, "{}", key)
+        .map_err(|_e| LoadKeyErr::new("failed to write key to temporary key file".to_string()))?;
 
     let key_file_path = key_file.into_temp_path();
 
@@ -48,25 +46,19 @@ fn zfs_loadkey(dataset: String, key: String) -> Result<(), LoadKeyErr> {
         .arg(format!("file://{}", key_file_path.to_str().unwrap()))
         .arg(dataset)
         .output()
-        .map_err(|e|
-			LoadKeyErr::new(format!("zfs load-key failed: {}", e))
-		)?;
+        .map_err(|e| LoadKeyErr::new(format!("zfs load-key failed: {}", e)))?;
 
     if !cmd.status.success() {
-        let output = std::str::from_utf8(&cmd.stderr)
-            .unwrap_or("<invalid UTF-8 output>");
-		return Err(LoadKeyErr::new(format!("Failed to load key: {}", output)));
+        let output = std::str::from_utf8(&cmd.stderr).unwrap_or("<invalid UTF-8 output>");
+        return Err(LoadKeyErr::new(format!("Failed to load key: {}", output)));
     }
 
     key_file_path
         .close()
-        .map_err(|_e|
-			LoadKeyErr::new("failed to clean up temporary key file".to_string())
-		)?;
+        .map_err(|_e| LoadKeyErr::new("failed to clean up temporary key file".to_string()))?;
 
-	Ok(())
+    Ok(())
 }
-
 
 const HTML_WEBFORM: &[u8] = br#"<!doctype html>
 <html lang="en">
@@ -86,54 +78,53 @@ const HTML_WEBFORM: &[u8] = br#"<!doctype html>
 </body>
 </html>"#;
 
-type BoxFut = Box<dyn Future<Item=Response<Body>, Error=hyper::Error> + Send>;
+type BoxFut = Box<dyn Future<Item = Response<Body>, Error = hyper::Error> + Send>;
 
 fn request_handler(req: Request<Body>, state: State) -> BoxFut {
     match (req.method(), req.uri().path()) {
-
         // Serve the web form
         (&Method::GET, "/") => Box::new(future::ok(Response::new(Body::from(HTML_WEBFORM)))),
 
         // Load key on POST
-        (&Method::POST, "/loadkey") => {
-            Box::new(req.into_body().concat2().map(move |body| {
-                let params = form_urlencoded::parse(body.as_ref())
-                    .into_owned()
-                    .collect::<HashMap<String, String>>();
+        (&Method::POST, "/loadkey") => Box::new(req.into_body().concat2().map(move |body| {
+            let params = form_urlencoded::parse(body.as_ref())
+                .into_owned()
+                .collect::<HashMap<String, String>>();
 
-				let key = if let Some(k) = params.get("key") {
-                    k
-                } else {
-                    return Response::builder()
-                        .status(StatusCode::UNPROCESSABLE_ENTITY)
-                        .body("Failure: Must provide a key".into())
-                        .unwrap();
-                };
+            let key = if let Some(k) = params.get("key") {
+                k
+            } else {
+                return Response::builder()
+                    .status(StatusCode::UNPROCESSABLE_ENTITY)
+                    .body("Failure: Must provide a key".into())
+                    .unwrap();
+            };
 
-                match zfs_loadkey(state.zfs_dataset, key.to_string()) {
-                    Ok(_) => Response::builder()
-                        .status(StatusCode::ACCEPTED)
-                        .body("Success!".into())
-                        .unwrap(),
-                    Err(err) => Response::builder()
-                        .status(StatusCode::UNAUTHORIZED)
-                        .body(err.message.into())
-                        .unwrap(),
-                }
-            }))
-        },
+            match zfs_loadkey(state.zfs_dataset, key.to_string()) {
+                Ok(_) => Response::builder()
+                    .status(StatusCode::ACCEPTED)
+                    .body("Success!".into())
+                    .unwrap(),
+                Err(err) => Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .body(err.message.into())
+                    .unwrap(),
+            }
+        })),
 
         // Return an error code for everything else
-        _ => Box::new(future::ok(Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Body::empty())
-            .unwrap())),
+        _ => Box::new(future::ok(
+            Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Body::empty())
+                .unwrap(),
+        )),
     }
 }
 
 #[derive(Debug, Clone)]
 struct State {
-	zfs_dataset: String
+    zfs_dataset: String,
 }
 
 fn main() {
@@ -153,25 +144,23 @@ fn main() {
         )
         .get_matches();
 
-	let zfs_dataset = String::from(m.value_of("zfs-dataset").unwrap());
+    let zfs_dataset = String::from(m.value_of("zfs-dataset").unwrap());
 
-	let state = State{
-    	zfs_dataset: zfs_dataset,
-	};
+    let state = State {
+        zfs_dataset: zfs_dataset,
+    };
 
     // TODO: I don't understand what this does
-	let make_service = move || {
-		let state2 = state.clone();
-		service_fn(move |req| request_handler(req, state2.clone()))
-	};
+    let make_service = move || {
+        let state2 = state.clone();
+        service_fn(move |req| request_handler(req, state2.clone()))
+    };
 
     // Then bind and serve...
-    let server = Server::bind(&addr)
-		.serve(make_service)
-		.map_err(|e| {
-    	    eprintln!("server error: {}", e);
-    	});
+    let server = Server::bind(&addr).serve(make_service).map_err(|e| {
+        eprintln!("server error: {}", e);
+    });
 
-	println!("Listening on http://{}", addr);
+    println!("Listening on http://{}", addr);
     hyper::rt::run(server);
 }
