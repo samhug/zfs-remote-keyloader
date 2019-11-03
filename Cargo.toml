@@ -6,8 +6,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2"
-rocket = { features = ["tls"] }
+futures = "0.1.29"
+hyper = "0.12"
 tempfile = "3.1.0"
-
-[build-dependencies]
-bindgen = "0.51"
+url = "2.1.0"

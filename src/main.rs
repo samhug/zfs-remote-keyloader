@@ -1,20 +1,74 @@
-#![feature(proc_macro_hygiene, decl_macro)]
-
-#[macro_use]
-extern crate rocket;
 extern crate clap;
+extern crate futures;
+extern crate hyper;
+extern crate url;
 
 use clap::{App, Arg};
-use rocket::fairing::AdHoc;
-use rocket::request::Form;
-use rocket::response::content::Html;
 
-// == Default Route ==
-// Serve up a web form prompting for a decryption key
-#[get("/")]
-fn index() -> Html<&'static str> {
-    Html(
-        r#"<!doctype html>
+use futures::future;
+use hyper::rt::{Future, Stream};
+use hyper::service::service_fn;
+use hyper::{Body, Method, Request, Response, Server, StatusCode};
+
+use url::form_urlencoded;
+use std::collections::HashMap;
+
+#[derive(Debug)]
+struct LoadKeyErr {
+    message: String,
+}
+
+impl LoadKeyErr {
+	fn new(msg: String) -> Self {
+		return LoadKeyErr{message: msg}
+	}
+}
+
+fn zfs_loadkey(dataset: String, key: String) -> Result<(), LoadKeyErr> {
+    use std::io::Write;
+    use std::process::Command;
+    use tempfile::NamedTempFile;
+
+    // create a temp file to hold the key
+    // TODO: You really shouldn't write the key to disk...
+    let mut key_file = NamedTempFile::new().map_err(|_e|
+		LoadKeyErr::new("failed to create temporary key file".to_string())
+	)?;
+
+    // write the key to the temp file
+    write!(key_file, "{}", key).map_err(|_e|
+		LoadKeyErr::new("failed to write key to temporary key file".to_string())
+	)?;
+
+    let key_file_path = key_file.into_temp_path();
+
+    let cmd = Command::new("zfs")
+        .arg("load-key")
+        .arg("-L")
+        .arg(format!("file://{}", key_file_path.to_str().unwrap()))
+        .arg(dataset)
+        .output()
+        .map_err(|e|
+			LoadKeyErr::new(format!("zfs load-key failed: {}", e))
+		)?;
+
+    if !cmd.status.success() {
+        let output = std::str::from_utf8(&cmd.stderr)
+            .unwrap_or("<invalid UTF-8 output>");
+		return Err(LoadKeyErr::new(format!("Failed to load key: {}", output)));
+    }
+
+    key_file_path
+        .close()
+        .map_err(|_e|
+			LoadKeyErr::new("failed to clean up temporary key file".to_string())
+		)?;
+
+	Ok(())
+}
+
+
+const HTML_WEBFORM: &[u8] = br#"<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -30,57 +84,61 @@ fn index() -> Html<&'static str> {
     <input type="submit" value="Load Key">
   </form>
 </body>
-</html>"#,
-    )
-}
+</html>"#;
 
-#[derive(FromForm)]
-struct KeyForm {
-    key: String,
-}
+type BoxFut = Box<dyn Future<Item=Response<Body>, Error=hyper::Error> + Send>;
 
-#[post("/loadkey", data = "<key>")]
-fn loadkey(key: Form<KeyForm>) -> String {
-    use std::io::Write;
-    use std::process::Command;
-    use tempfile::NamedTempFile;
+fn request_handler(req: Request<Body>, state: State) -> BoxFut {
+    match (req.method(), req.uri().path()) {
 
-    let dataset = "rpool";
+        // Serve the web form
+        (&Method::GET, "/") => Box::new(future::ok(Response::new(Body::from(HTML_WEBFORM)))),
 
-    // create a temp file to hold the key
-    // TODO: You really shouldn't write the key to disk...
-    let mut key_file = NamedTempFile::new().expect("failed to create temporary key file");
+        // Load key on POST
+        (&Method::POST, "/loadkey") => {
+            Box::new(req.into_body().concat2().map(move |body| {
+                let params = form_urlencoded::parse(body.as_ref())
+                    .into_owned()
+                    .collect::<HashMap<String, String>>();
 
-    // write the key to the temp file
-    write!(key_file, "{}", key.key).expect("failed to write key to temporary key file");
+				let key = if let Some(k) = params.get("key") {
+                    k
+                } else {
+                    return Response::builder()
+                        .status(StatusCode::UNPROCESSABLE_ENTITY)
+                        .body("Failure: Must provide a key".into())
+                        .unwrap();
+                };
 
-    let key_file_path = key_file.into_temp_path();
+                match zfs_loadkey(state.zfs_dataset, key.to_string()) {
+                    Ok(_) => Response::builder()
+                        .status(StatusCode::ACCEPTED)
+                        .body("Success!".into())
+                        .unwrap(),
+                    Err(err) => Response::builder()
+                        .status(StatusCode::UNAUTHORIZED)
+                        .body(err.message.into())
+                        .unwrap(),
+                }
+            }))
+        },
 
-    let status = Command::new("zfs")
-        .arg("load-key")
-        .arg("-L")
-        .arg(format!("file://{}", key_file_path.to_str().unwrap()))
-        .arg(dataset)
-        .status()
-        .expect("failed to execute zfs load-key command");
-
-    if !status.success() {
-        return match status.code() {
-            Some(code) => format!("Failed to load key: exit-code {}", code),
-            None => format!("Failed to load key: Process terminated by signal"),
-        };
+        // Return an error code for everything else
+        _ => Box::new(future::ok(Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::empty())
+            .unwrap())),
     }
-
-    key_file_path
-        .close()
-        .expect("failed to clean up temporary key file");
-
-    format!("Success!")
 }
 
-struct DatasetName(String);
+#[derive(Debug, Clone)]
+struct State {
+	zfs_dataset: String
+}
 
 fn main() {
+    let addr = ([10, 90, 0, 1], 8000).into();
+
     let m = App::new("zfs-remote-keyloader")
         .version("v0.0.1")
         .about("Serves a web form to prompt for ZFS decryption keys")
@@ -95,12 +153,25 @@ fn main() {
         )
         .get_matches();
 
-    let zfs_dataset = String::from(m.value_of("zfs-dataset").unwrap());
+	let zfs_dataset = String::from(m.value_of("zfs-dataset").unwrap());
 
-    rocket::ignite()
-        .mount("/", routes![index, loadkey])
-        .attach(AdHoc::on_attach("ZFS Dataset Name", |rocket| {
-            Ok(rocket.manage(DatasetName(zfs_dataset)))
-        }))
-        .launch();
+	let state = State{
+    	zfs_dataset: zfs_dataset,
+	};
+
+    // TODO: I don't understand what this does
+	let make_service = move || {
+		let state2 = state.clone();
+		service_fn(move |req| request_handler(req, state2.clone()))
+	};
+
+    // Then bind and serve...
+    let server = Server::bind(&addr)
+		.serve(make_service)
+		.map_err(|e| {
+    	    eprintln!("server error: {}", e);
+    	});
+
+	println!("Listening on http://{}", addr);
+    hyper::rt::run(server);
 }
