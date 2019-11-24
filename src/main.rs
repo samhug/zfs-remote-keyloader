@@ -6,6 +6,7 @@ extern crate url;
 use clap::{App, Arg};
 
 use futures::future;
+use futures::sync::mpsc;
 use hyper::rt::{Future, Stream};
 use hyper::service::service_fn;
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
@@ -80,7 +81,7 @@ const HTML_WEBFORM: &[u8] = br#"<!doctype html>
 
 type BoxFut = Box<dyn Future<Item = Response<Body>, Error = hyper::Error> + Send>;
 
-fn request_handler(req: Request<Body>, state: State) -> BoxFut {
+fn request_handler(req: Request<Body>, mut state: State) -> BoxFut {
     match (req.method(), req.uri().path()) {
         // Serve the web form
         (&Method::GET, "/") => Box::new(future::ok(Response::new(Body::from(HTML_WEBFORM)))),
@@ -101,10 +102,13 @@ fn request_handler(req: Request<Body>, state: State) -> BoxFut {
             };
 
             match zfs_loadkey(state.zfs_dataset, key.to_string()) {
-                Ok(_) => Response::builder()
-                    .status(StatusCode::ACCEPTED)
-                    .body("Success!".into())
-                    .unwrap(),
+                Ok(_) => {
+                    state.shutdown_chan.try_send(()).unwrap();
+                    Response::builder()
+                        .status(StatusCode::ACCEPTED)
+                        .body("Success!".into())
+                        .unwrap()
+                }
                 Err(err) => Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
                     .body(err.message.into())
@@ -125,14 +129,22 @@ fn request_handler(req: Request<Body>, state: State) -> BoxFut {
 #[derive(Debug, Clone)]
 struct State {
     zfs_dataset: String,
+    shutdown_chan: mpsc::Sender<()>,
 }
 
 fn main() {
-    let addr = ([10, 90, 0, 1], 8000).into();
-
     let m = App::new("zfs-remote-keyloader")
-        .version("v0.0.1")
+        .version("v0.1.0")
         .about("Serves a web form to prompt for ZFS decryption keys")
+        .arg(
+            Arg::with_name("addr")
+                .short("l")
+                .long("listen")
+                .value_name("ADDRESS:PORT")
+                .help("The IP address and port to listen on")
+                .required(true)
+                .takes_value(true),
+        )
         .arg(
             Arg::with_name("zfs-dataset")
                 .short("d")
@@ -144,10 +156,15 @@ fn main() {
         )
         .get_matches();
 
+    let addr = m.value_of("addr").unwrap().parse().unwrap();
     let zfs_dataset = String::from(m.value_of("zfs-dataset").unwrap());
+
+    // Create a channel for the shutdown signal
+    let (tx, rx) = mpsc::channel::<()>(1);
 
     let state = State {
         zfs_dataset: zfs_dataset,
+        shutdown_chan: tx,
     };
 
     // TODO: I don't understand what this does
@@ -156,10 +173,12 @@ fn main() {
         service_fn(move |req| request_handler(req, state2.clone()))
     };
 
-    // Then bind and serve...
-    let server = Server::bind(&addr).serve(make_service).map_err(|e| {
-        eprintln!("server error: {}", e);
-    });
+    let server = Server::bind(&addr)
+        .serve(make_service)
+        .with_graceful_shutdown(rx.into_future().map(|_| ()).map_err(|_| ()))
+        .map_err(|_| {
+            eprintln!("server shutdown");
+        });
 
     println!("Listening on http://{}", addr);
     hyper::rt::run(server);

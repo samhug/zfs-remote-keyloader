@@ -9,8 +9,7 @@ pkgs.mkShell {
   name = "zfs-remote-keyloader";
 
   buildInputs = [
-    rustc
     cargo
-    #pkgs.zfs
+    rustc
   ];
 }
