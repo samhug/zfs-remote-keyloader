@@ -1,16 +1,8 @@
-let
-  pkgs = import ./nix/pkgs.nix {};
-in
-pkgs.rustPlatformCustom.buildRustPackage rec {
-  pname = "zfs-remote-keyloader";
-  version = "0.0.1";
+{ pkgs ? import ./nix/pkgs.nix {} }:
 
-  src = ./.;
+pkgs.naersk.buildPackage rec {
+  name = "zfs-remote-keyloader-${version}";
+  version = "0.1.0";
 
-  cargoSha256 = "0pqvalddax45mhw856bg0l3b8qriabr4kv7wyny12qzcm1a6nrl3";
-
-  meta = {
-    # TODO: description = "";
-    homepage = https://github.com/samhug/zfs-remote-keyloader;
-  };
+  src = pkgs.lib.cleanSource ./.;
 }

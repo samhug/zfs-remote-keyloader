@@ -5,11 +5,10 @@ extern crate url;
 
 use clap::{App, Arg};
 
-use futures::future;
-use futures::sync::mpsc;
-use hyper::rt::{Future, Stream};
-use hyper::service::service_fn;
+use futures::StreamExt;
+use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
+use tokio::sync::mpsc;
 
 use std::collections::HashMap;
 use url::form_urlencoded;
@@ -21,7 +20,7 @@ struct LoadKeyErr {
 
 impl LoadKeyErr {
     fn new(msg: String) -> Self {
-        return LoadKeyErr { message: msg };
+        LoadKeyErr { message: msg }
     }
 }
 
@@ -79,15 +78,24 @@ const HTML_WEBFORM: &[u8] = br#"<!doctype html>
 </body>
 </html>"#;
 
-type BoxFut = Box<dyn Future<Item = Response<Body>, Error = hyper::Error> + Send>;
+#[derive(Debug, Clone)]
+struct State {
+    zfs_dataset: String,
+    shutdown_chan: mpsc::Sender<()>,
+}
 
-fn request_handler(req: Request<Body>, mut state: State) -> BoxFut {
+async fn request_handler(
+    req: Request<Body>,
+    mut state: State,
+) -> Result<Response<Body>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         // Serve the web form
-        (&Method::GET, "/") => Box::new(future::ok(Response::new(Body::from(HTML_WEBFORM)))),
+        (&Method::GET, "/") => Ok(Response::new(Body::from(HTML_WEBFORM))),
 
         // Load key on POST
-        (&Method::POST, "/loadkey") => Box::new(req.into_body().concat2().map(move |body| {
+        (&Method::POST, "/loadkey") => {
+            let body = hyper::body::to_bytes(req.into_body()).await?;
+
             let params = form_urlencoded::parse(body.as_ref())
                 .into_owned()
                 .collect::<HashMap<String, String>>();
@@ -95,44 +103,38 @@ fn request_handler(req: Request<Body>, mut state: State) -> BoxFut {
             let key = if let Some(k) = params.get("key") {
                 k
             } else {
-                return Response::builder()
+                return Ok(Response::builder()
                     .status(StatusCode::UNPROCESSABLE_ENTITY)
                     .body("Failure: Must provide a key".into())
-                    .unwrap();
+                    .unwrap());
             };
 
             match zfs_loadkey(state.zfs_dataset, key.to_string()) {
                 Ok(_) => {
                     state.shutdown_chan.try_send(()).unwrap();
-                    Response::builder()
+                    Ok(Response::builder()
                         .status(StatusCode::ACCEPTED)
                         .body("Success!".into())
-                        .unwrap()
+                        .unwrap())
                 }
-                Err(err) => Response::builder()
+                Err(err) => Ok(Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
                     .body(err.message.into())
-                    .unwrap(),
+                    .unwrap()),
             }
-        })),
+        }
 
         // Return an error code for everything else
-        _ => Box::new(future::ok(
-            Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(Body::empty())
-                .unwrap(),
-        )),
+        _ => {
+            let mut not_found = Response::default();
+            *not_found.status_mut() = StatusCode::NOT_FOUND;
+            Ok(not_found)
+        }
     }
 }
 
-#[derive(Debug, Clone)]
-struct State {
-    zfs_dataset: String,
-    shutdown_chan: mpsc::Sender<()>,
-}
-
-fn main() {
+#[tokio::main]
+pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let m = App::new("zfs-remote-keyloader")
         .version("v0.1.0")
         .about("Serves a web form to prompt for ZFS decryption keys")
@@ -163,23 +165,25 @@ fn main() {
     let (tx, rx) = mpsc::channel::<()>(1);
 
     let state = State {
-        zfs_dataset: zfs_dataset,
+        zfs_dataset,
         shutdown_chan: tx,
     };
 
     // TODO: I don't understand what this does
-    let make_service = move || {
-        let state2 = state.clone();
-        service_fn(move |req| request_handler(req, state2.clone()))
-    };
+    let make_svc = make_service_fn(|_conn| {
+        let state = state.clone();
+        async { Ok::<_, hyper::Error>(service_fn(move |req| request_handler(req, state.clone()))) }
+    });
 
     let server = Server::bind(&addr)
-        .serve(make_service)
-        .with_graceful_shutdown(rx.into_future().map(|_| ()).map_err(|_| ()))
-        .map_err(|_| {
-            eprintln!("server shutdown");
+        .serve(make_svc)
+        .with_graceful_shutdown(async {
+            rx.into_future().await;
         });
 
     println!("Listening on http://{}", addr);
-    hyper::rt::run(server);
+
+    server.await?;
+
+    Ok(())
 }
