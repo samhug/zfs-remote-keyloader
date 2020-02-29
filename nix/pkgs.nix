@@ -5,7 +5,7 @@ let
   local-overlay = self: super:
     let
       rust-channel = self.rustChannelOf
-        { date = "2019-12-19"; channel = "nightly"; };
+        { date = "2020-02-24"; channel = "nightly"; };
 
       rustc = rust-channel.rust.override {
         targets = [ "x86_64-unknown-linux-musl" ];

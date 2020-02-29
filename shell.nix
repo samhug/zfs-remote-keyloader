@@ -5,11 +5,15 @@ with
   inherit (pkgs.rustPlatformCustom.rust) rustc cargo;
 };
 
-pkgs.mkShell {
+pkgs.mkShell rec {
   name = "zfs-remote-keyloader";
 
   buildInputs = [
     cargo
     rustc
   ];
+
+  shellHook = ''
+    export name="${name}"
+  '';
 }

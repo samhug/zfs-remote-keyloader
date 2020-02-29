@@ -169,10 +169,12 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         shutdown_chan: tx,
     };
 
-    // TODO: I don't understand what this does
     let make_svc = make_service_fn(|_conn| {
         let state = state.clone();
-        async { Ok::<_, hyper::Error>(service_fn(move |req| request_handler(req, state.clone()))) }
+        async {
+            let service = service_fn(move |req| request_handler(req, state.clone()));
+            Ok::<_, hyper::Error>(service)
+        }
     });
 
     let server = Server::bind(&addr)
