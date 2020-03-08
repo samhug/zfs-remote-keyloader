@@ -1,11 +1,8 @@
-extern crate clap;
-extern crate futures;
-extern crate hyper;
-extern crate url;
+mod zfs;
 
 use clap::{App, Arg};
 
-use futures::StreamExt;
+use futures_util::stream::StreamExt;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use tokio::sync::mpsc;
@@ -13,60 +10,12 @@ use tokio::sync::mpsc;
 use std::collections::HashMap;
 use url::form_urlencoded;
 
-#[derive(Debug)]
-struct LoadKeyErr {
-    message: String,
-}
-
-impl LoadKeyErr {
-    fn new(msg: String) -> Self {
-        LoadKeyErr { message: msg }
-    }
-}
-
-fn zfs_loadkey(dataset: String, key: String) -> Result<(), LoadKeyErr> {
-    use std::io::Write;
-    use std::process::Command;
-    use tempfile::NamedTempFile;
-
-    // create a temp file to hold the key
-    // TODO: You really shouldn't write the key to disk...
-    let mut key_file = NamedTempFile::new()
-        .map_err(|_e| LoadKeyErr::new("failed to create temporary key file".to_string()))?;
-
-    // write the key to the temp file
-    write!(key_file, "{}", key)
-        .map_err(|_e| LoadKeyErr::new("failed to write key to temporary key file".to_string()))?;
-
-    let key_file_path = key_file.into_temp_path();
-
-    let cmd = Command::new("zfs")
-        .arg("load-key")
-        .arg("-L")
-        .arg(format!("file://{}", key_file_path.to_str().unwrap()))
-        .arg(dataset)
-        .output()
-        .map_err(|e| LoadKeyErr::new(format!("zfs load-key failed: {}", e)))?;
-
-    if !cmd.status.success() {
-        let output = std::str::from_utf8(&cmd.stderr).unwrap_or("<invalid UTF-8 output>");
-        return Err(LoadKeyErr::new(format!("Failed to load key: {}", output)));
-    }
-
-    key_file_path
-        .close()
-        .map_err(|_e| LoadKeyErr::new("failed to clean up temporary key file".to_string()))?;
-
-    Ok(())
-}
-
 const HTML_WEBFORM: &[u8] = br#"<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <title>ZFS Remote Keyloader</title>
   <meta name="description" content="ZFS Remote Keyloader">
-  <link rel="stylesheet" href="css/styles.css?v=1.0">
 </head>
 
 <body>
@@ -96,9 +45,8 @@ async fn request_handler(
         (&Method::POST, "/loadkey") => {
             let body = hyper::body::to_bytes(req.into_body()).await?;
 
-            let params = form_urlencoded::parse(body.as_ref())
-                .into_owned()
-                .collect::<HashMap<String, String>>();
+            let params: HashMap<String, String> =
+                form_urlencoded::parse(body.as_ref()).into_owned().collect();
 
             let key = if let Some(k) = params.get("key") {
                 k
@@ -109,7 +57,7 @@ async fn request_handler(
                     .unwrap());
             };
 
-            match zfs_loadkey(state.zfs_dataset, key.to_string()) {
+            match zfs::load_key(&state.zfs_dataset, key) {
                 Ok(_) => {
                     state.shutdown_chan.try_send(()).unwrap();
                     Ok(Response::builder()
@@ -119,7 +67,7 @@ async fn request_handler(
                 }
                 Err(err) => Ok(Response::builder()
                     .status(StatusCode::UNAUTHORIZED)
-                    .body(err.message.into())
+                    .body(err.to_string().into())
                     .unwrap()),
             }
         }
@@ -134,7 +82,7 @@ async fn request_handler(
 }
 
 #[tokio::main]
-pub async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn main() -> Result<(), hyper::Error> {
     let m = App::new("zfs-remote-keyloader")
         .version("v0.1.0")
         .about("Serves a web form to prompt for ZFS decryption keys")

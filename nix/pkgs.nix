@@ -5,10 +5,21 @@ let
   local-overlay = self: super:
     let
       rust-channel = self.rustChannelOf
-        { date = "2020-02-24"; channel = "nightly"; };
+        {
+          channel = "nightly";
+          date = "2020-03-06";
+          sha256 = "1i8a4arwzadbbk7p8pfpgc13dpd4zljlcbz1iz5fpmrrgpy66369";
+        };
 
       rustc = rust-channel.rust.override {
-        targets = [ "x86_64-unknown-linux-musl" ];
+        extensions = [
+          "clippy-preview"
+          "rls-preview"
+          "rustfmt-preview"
+          "rust-analysis"
+          "rust-std"
+          "rust-src"
+        ];
       };
 
       cargo = rust-channel.cargo;

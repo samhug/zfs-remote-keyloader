@@ -1,4 +1,8 @@
-{ pkgs ? import ./nix/pkgs.nix {} }:
+{}:
+
+let
+  pkgs = import ./nix/pkgs.nix {};
+in
 
 pkgs.naersk.buildPackage rec {
   name = "zfs-remote-keyloader-${version}";
