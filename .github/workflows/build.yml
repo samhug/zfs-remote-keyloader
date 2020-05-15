@@ -1,0 +1,23 @@
+name: Build-and-Test
+
+on: [push]
+
+jobs:
+  build-linux:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Check formatting
+      run: |
+        cargo fmt --all -- --check
+
+    - name: Test
+      run: |
+        RUST_BACKTRACE=full cargo test
+
+    - name: Build Release
+      run: |
+        cargo build --release
