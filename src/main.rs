@@ -10,22 +10,7 @@ use tokio::sync::mpsc;
 use std::collections::HashMap;
 use url::form_urlencoded;
 
-const HTML_WEBFORM: &[u8] = br#"<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>ZFS Remote Keyloader</title>
-  <meta name="description" content="ZFS Remote Keyloader">
-</head>
-
-<body>
-  <p>Hello!</p>
-  <form action="/loadkey" method="post">
-    <input type="password" name="key" autofocus>
-    <input type="submit" value="Load Key">
-  </form>
-</body>
-</html>"#;
+const HTML_WEBFORM: &str = include_str!("../static/index.html");
 
 #[derive(Debug, Clone)]
 struct State {

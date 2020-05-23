@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ZFS Remote Keyloader</title>
+    <meta name="description" content="ZFS Remote Keyloader" />
+    <style>
+      #outer-div {
+        width: 100%;
+        text-align: center;
+      }
+      #inner-div {
+        display: inline-block;
+        margin: 20px auto;
+        padding: 20px;
+        border: solid 1px #555;
+        background-color: #eed;
+        box-shadow: 0 0 10px rgba(0,0,0,0.6);
+        -moz-box-shadow: 0 0 10px rgba(0,0,0,0.6);
+        -webkit-box-shadow: 0 0 10px rgba(0,0,0,0.6);
+        -o-box-shadow: 0 0 10px rgba(0,0,0,0.6);
+      }
+      input[type=password] {
+        padding: 12px 0;
+        width: 250px;
+      }
+      input[type=submit] {
+        padding: 8px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="outer-div">
+      <div id="inner-div">
+        <form action="/loadkey" method="post">
+          <input type="password" name="key" autofocus />
+          <input type="submit" value="Load Key" />
+        </form>
+      </div>
+    </div>
+  </body>
+</html>
