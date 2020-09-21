@@ -69,7 +69,7 @@ async fn request_handler(
 #[tokio::main]
 pub async fn main() -> Result<(), hyper::Error> {
     let m = App::new("zfs-remote-keyloader")
-        .version("v0.1.0")
+        .version("v0.2.2")
         .about("Serves a web form to prompt for ZFS decryption keys")
         .arg(
             Arg::with_name("addr")
