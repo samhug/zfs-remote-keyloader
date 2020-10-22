@@ -8,5 +8,5 @@ edition = "2018"
 clap = "2"
 futures-util = "0.3"
 hyper = "0.13"
-tokio = { version = "0.2", features = ["macros", "stream", "sync"] }
+tokio = { version = "0.3", features = ["macros", "stream", "sync"] }
 url = "2.1"
