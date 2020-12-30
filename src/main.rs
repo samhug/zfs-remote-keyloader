@@ -2,7 +2,6 @@ mod zfs;
 
 use clap::{App, Arg};
 
-use futures_util::stream::StreamExt;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
 use tokio::sync::mpsc;
@@ -95,7 +94,7 @@ pub async fn main() -> Result<(), hyper::Error> {
     let zfs_dataset = String::from(m.value_of("zfs-dataset").unwrap());
 
     // Create a channel for the shutdown signal
-    let (tx, rx) = mpsc::channel::<()>(1);
+    let (tx, mut rx) = mpsc::channel::<()>(1);
 
     let state = State {
         zfs_dataset,
@@ -113,7 +112,7 @@ pub async fn main() -> Result<(), hyper::Error> {
     let server = Server::bind(&addr)
         .serve(make_svc)
         .with_graceful_shutdown(async {
-            rx.into_future().await;
+            rx.recv().await;
         });
 
     println!("Listening on http://{}", addr);
