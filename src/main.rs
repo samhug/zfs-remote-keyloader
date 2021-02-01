@@ -17,10 +17,7 @@ struct State {
     shutdown_chan: mpsc::Sender<()>,
 }
 
-async fn request_handler(
-    req: Request<Body>,
-    state: State,
-) -> Result<Response<Body>, hyper::Error> {
+async fn request_handler(req: Request<Body>, state: State) -> Result<Response<Body>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         // Serve the web form
         (&Method::GET, "/") => Ok(Response::new(Body::from(HTML_WEBFORM))),

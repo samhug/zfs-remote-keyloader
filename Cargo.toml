@@ -1,6 +1,6 @@
 [package]
 name = "zfs-remote-keyloader"
-version = "0.2.3"
+version = "0.2.4"
 authors = ["Sam Hug <s@m-h.ug>"]
 edition = "2018"
 
