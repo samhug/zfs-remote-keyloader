@@ -19,7 +19,7 @@ struct State {
 
 async fn request_handler(
     req: Request<Body>,
-    mut state: State,
+    state: State,
 ) -> Result<Response<Body>, hyper::Error> {
     match (req.method(), req.uri().path()) {
         // Serve the web form
@@ -68,7 +68,7 @@ async fn request_handler(
 #[tokio::main]
 pub async fn main() -> Result<(), hyper::Error> {
     let m = App::new("zfs-remote-keyloader")
-        .version("v0.2.3")
+        .version(env!("CARGO_PKG_VERSION"))
         .about("Serves a web form to prompt for ZFS decryption keys")
         .arg(
             Arg::with_name("addr")
