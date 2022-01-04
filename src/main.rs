@@ -68,8 +68,8 @@ pub async fn main() -> Result<(), hyper::Error> {
         .version(env!("CARGO_PKG_VERSION"))
         .about("Serves a web form to prompt for ZFS decryption keys")
         .arg(
-            Arg::with_name("addr")
-                .short("l")
+            Arg::new("addr")
+                .short('l')
                 .long("listen")
                 .value_name("ADDRESS:PORT")
                 .help("The IP address and port to listen on")
@@ -77,8 +77,8 @@ pub async fn main() -> Result<(), hyper::Error> {
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("zfs-dataset")
-                .short("d")
+            Arg::new("zfs-dataset")
+                .short('d')
                 .long("zfs-dataset")
                 .value_name("DATASET")
                 .help("The ZFS dataset to load key for")
