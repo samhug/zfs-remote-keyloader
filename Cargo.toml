@@ -2,7 +2,7 @@
 name = "zfs-remote-keyloader"
 version = "0.2.5"
 authors = ["Sam Hug <s@m-h.ug>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 clap = "3"
