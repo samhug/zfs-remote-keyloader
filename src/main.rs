@@ -1,6 +1,6 @@
 mod zfs;
 
-use clap::{App, Arg};
+use clap::{Command, Arg};
 
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
@@ -64,7 +64,7 @@ async fn request_handler(req: Request<Body>, state: State) -> Result<Response<Bo
 
 #[tokio::main]
 pub async fn main() -> Result<(), hyper::Error> {
-    let m = App::new("zfs-remote-keyloader")
+    let m = Command::new("zfs-remote-keyloader")
         .version(env!("CARGO_PKG_VERSION"))
         .about("Serves a web form to prompt for ZFS decryption keys")
         .arg(
