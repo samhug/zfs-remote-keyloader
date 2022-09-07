@@ -8,4 +8,4 @@ edition = "2021"
 clap = "3"
 hyper = { version = "0.14", features = [ "http1", "runtime", "server"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync"] }
-url = "2.2"
+url = "2.3"
