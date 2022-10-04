@@ -1,6 +1,6 @@
 mod zfs;
 
-use clap::{Arg, Command};
+use clap::{Arg, ArgAction, Command};
 
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Method, Request, Response, Server, StatusCode};
@@ -74,7 +74,7 @@ pub async fn main() -> Result<(), hyper::Error> {
                 .value_name("ADDRESS:PORT")
                 .help("The IP address and port to listen on")
                 .required(true)
-                .takes_value(true),
+                .action(ArgAction::Set),
         )
         .arg(
             Arg::new("zfs-dataset")
@@ -83,12 +83,12 @@ pub async fn main() -> Result<(), hyper::Error> {
                 .value_name("DATASET")
                 .help("The ZFS dataset to load key for")
                 .required(true)
-                .takes_value(true),
+                .action(ArgAction::Set),
         )
         .get_matches();
 
-    let addr = m.value_of("addr").unwrap().parse().unwrap();
-    let zfs_dataset = String::from(m.value_of("zfs-dataset").unwrap());
+    let addr = m.get_one::<String>("addr").unwrap().parse().unwrap();
+    let zfs_dataset = String::from(m.get_one::<String>("zfs-dataset").unwrap());
 
     // Create a channel for the shutdown signal
     let (tx, mut rx) = mpsc::channel::<()>(1);
