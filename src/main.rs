@@ -19,10 +19,10 @@ struct State {
 
 async fn request_handler(req: Request<Body>, state: State) -> Result<Response<Body>, hyper::Error> {
     match (req.method(), req.uri().path()) {
-        // Serve the web form
+        // serve the web form
         (&Method::GET, "/") => Ok(Response::new(Body::from(HTML_WEBFORM))),
 
-        // Load key on POST
+        // handle form submit
         (&Method::POST, "/loadkey") => {
             let body = hyper::body::to_bytes(req.into_body()).await?;
 
@@ -53,7 +53,7 @@ async fn request_handler(req: Request<Body>, state: State) -> Result<Response<Bo
             }
         }
 
-        // Return an error code for everything else
+        // return an error code for everything else
         _ => {
             let mut not_found = Response::default();
             *not_found.status_mut() = StatusCode::NOT_FOUND;
